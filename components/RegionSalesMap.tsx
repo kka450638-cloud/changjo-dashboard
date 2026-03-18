@@ -716,7 +716,7 @@ export default function RegionSalesMap() {
           isMapOpen ? "flex-1 min-h-[45dvh] md:min-h-0" : "flex-none"
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white/80 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/80 md:px-6">
+        <div className="relative z-30 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white/90 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/90 md:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-2 font-medium text-zinc-700 dark:text-zinc-200">기간</span>
             {PERIOD_LABELS.map(({ key, label }) => (
@@ -738,7 +738,7 @@ export default function RegionSalesMap() {
           <button
             type="button"
             onClick={() => setIsMapOpen((v) => !v)}
-            className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="pointer-events-auto rounded-full border border-zinc-300 bg-white px-3 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {isMapOpen ? "지도 닫기" : "지도 열기"}
           </button>
