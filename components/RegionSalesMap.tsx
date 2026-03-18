@@ -54,7 +54,6 @@ export default function RegionSalesMap() {
   const [period, setPeriod] = useState<PeriodKey>("1w");
   const [summaries, setSummaries] = useState<StoreSalesSummary[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [mapScrollTick, setMapScrollTick] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(true);
 
   // 일일 판매량 입력용 상태
@@ -319,12 +318,23 @@ export default function RegionSalesMap() {
     }
   }
 
-  useEffect(() => {
-    if (mapScrollTick <= 0) return;
-    if (!isMapOpen) setIsMapOpen(true);
+  function scrollToMap() {
     const el = document.getElementById("map-section");
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [mapScrollTick, isMapOpen]);
+  }
+
+  function handleToggleMapFromSidebar() {
+    if (isMapOpen) {
+      setIsMapOpen(false);
+      setSelectedMapStoreId(null);
+      return;
+    }
+    setIsMapOpen(true);
+    // DOM 반영 후 스크롤
+    requestAnimationFrame(() => {
+      scrollToMap();
+    });
+  }
 
   async function handleMapDetailSave() {
     if (!selectedMapStoreId || !detailDate) {
@@ -409,18 +419,8 @@ export default function RegionSalesMap() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:grid-cols-1">
           <button
             type="button"
-            onClick={() => {
-              if (!isMapOpen) setIsMapOpen(true);
-              setMapScrollTick((v) => v + 1);
-            }}
+            onClick={handleToggleMapFromSidebar}
             className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
-          >
-            지도 열기
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsMapOpen((v) => !v)}
-            className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             {isMapOpen ? "지도 닫기" : "지도 열기"}
           </button>
