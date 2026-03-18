@@ -54,7 +54,6 @@ export default function RegionSalesMap() {
   const [period, setPeriod] = useState<PeriodKey>("1w");
   const [summaries, setSummaries] = useState<StoreSalesSummary[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [isMapOpen, setIsMapOpen] = useState(false);
 
   // 일일 판매량 입력용 상태
   const [mode, setMode] = useState<"single" | "range">("single");
@@ -675,24 +674,17 @@ export default function RegionSalesMap() {
         <div className="mx-auto w-full max-w-lg px-4">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-              지도는 새 창에서 열립니다
+              지도는 새 탭에서 열립니다
             </div>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               모바일에서도 지도가 안정적으로 보이도록, 지도 화면을 별도 페이지로 분리했습니다.
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => setIsMapOpen(true)}
-                className="inline-flex flex-1 items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600"
-              >
-                지도 열기
-              </button>
               <a
                 href={`/map?period=${period}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-amber-500 bg-white px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-400 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                className="inline-flex flex-1 items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600"
               >
                 새 탭으로 열기
               </a>
@@ -709,33 +701,6 @@ export default function RegionSalesMap() {
           </div>
         </div>
       </main>
-
-      {/* 지도 모달 (열기/닫기) */}
-      {isMapOpen && (
-        <div className="fixed inset-0 z-[999] bg-black/50 p-3 md:p-6">
-          <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                지도
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMapOpen(false)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              >
-                닫기
-              </button>
-            </div>
-            <div className="flex-1">
-              <iframe
-                title="Changjo map"
-                src={`/map?period=${period}`}
-                className="h-full w-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AI 리포트 패널 (슬라이드) */}
       {reportPanelOpen && (
