@@ -336,22 +336,53 @@ export async function getDailyStoreTotals(
 
   if (error) throw new Error(error.message);
 
-  type Row = {
-    sales_date: string;
-    quantity: number;
-    store_id: string;
-    stores: { id: string; name: string; region: string | null } | null;
+  type StoreJoin = { id: string; name: string; region: string | null };
+  type RawRow = {
+    sales_date?: unknown;
+    quantity?: unknown;
+    store_id?: unknown;
+    stores?: unknown; // object | array | null
   };
 
-  const rows = (data ?? []) as Row[];
+  const rows = ((data ?? []) as RawRow[]).map((item) => {
+    const rawStores = item.stores;
+    let store: StoreJoin | null = null;
+
+    if (rawStores && typeof rawStores === "object") {
+      if (Array.isArray(rawStores)) {
+        const first = rawStores[0] as any;
+        if (first && typeof first === "object") {
+          store = {
+            id: String(first.id ?? ""),
+            name: String(first.name ?? ""),
+            region: first.region == null ? null : String(first.region),
+          };
+        }
+      } else {
+        const s = rawStores as any;
+        store = {
+          id: String(s.id ?? ""),
+          name: String(s.name ?? ""),
+          region: s.region == null ? null : String(s.region),
+        };
+      }
+    }
+
+    return {
+      sales_date: String(item.sales_date ?? ""),
+      quantity: Number(item.quantity ?? 0),
+      store_id: String(item.store_id ?? ""),
+      store,
+    };
+  });
   const map = new Map<
     string,
     { storeId: string; storeName: string; region: string | null; totalQuantity: number }
   >();
 
   for (const row of rows) {
-    const store = row.stores;
-    if (!store) continue;
+    const store = row.store;
+    if (!store || !store.id) continue;
     const key = store.id;
     const prev =
       map.get(key) ?? {
