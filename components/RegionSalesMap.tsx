@@ -392,6 +392,32 @@ export default function RegionSalesMap() {
           </div>
         </div>
 
+        {/* 빠른 메뉴 */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:grid-cols-1">
+          <a
+            href={`/map?period=${period}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
+          >
+            지도 열기
+          </a>
+          <a
+            href="/ranking"
+            className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            랭킹·히트맵 보기
+          </a>
+          <button
+            type="button"
+            onClick={handleGenerateReport}
+            disabled={reportPending}
+            className="inline-flex items-center justify-center rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
+          >
+            {reportPending ? "분석 중…" : "AI 리포트 분석"}
+          </button>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -400,18 +426,10 @@ export default function RegionSalesMap() {
           >
             신규 지점 추가
           </button>
-          <button
-            type="button"
-            onClick={handleGenerateReport}
-            disabled={reportPending}
-            className="inline-flex items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-          >
-            {reportPending ? "작성 중…" : "일일 AI 리포트"}
-          </button>
         </div>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-          일일 AI 리포트: 선택한 기간 데이터로 <strong>1만 개 지점 목표</strong> 관점의 일일 요약·액션과
-          전일 대비 급등·급락 지점을 요약합니다.
+          AI 리포트 분석은 선택한 기간 데이터를 바탕으로 <strong>1만 개 지점 목표</strong> 관점의 요약·액션과
+          급등·급락 포인트를 정리합니다.
         </p>
 
         {/* 지점 검색 + 케어 필요 지점 설정 */}
@@ -670,35 +688,9 @@ export default function RegionSalesMap() {
         </div>
       </aside>
 
-      <main className="flex-1 flex items-center justify-center min-h-[45dvh] md:min-h-0 bg-zinc-50 dark:bg-zinc-950">
-        <div className="mx-auto w-full max-w-lg px-4">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-              지도는 새 탭에서 열립니다
-            </div>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              모바일에서도 지도가 안정적으로 보이도록, 지도 화면을 별도 페이지로 분리했습니다.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <a
-                href={`/map?period=${period}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex flex-1 items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600"
-              >
-                새 탭으로 열기
-              </a>
-              <a
-                href="/ranking"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              >
-                랭킹/히트맵 보기
-              </a>
-            </div>
-            <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-              현재 선택 기간: <span className="font-semibold">{PERIOD_LABELS.find((p) => p.key === period)?.label}</span>
-            </div>
-          </div>
+      <main className="flex-1 min-h-[45dvh] md:min-h-0 bg-zinc-50 dark:bg-zinc-950">
+        <div className="h-full w-full p-6 text-sm text-zinc-500 dark:text-zinc-400 flex items-center justify-center">
+          지도는 사이드바의 <span className="mx-1 font-semibold text-amber-600 dark:text-amber-400">지도 열기</span>로 새 탭에서 확인하세요.
         </div>
       </main>
 
