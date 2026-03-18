@@ -375,8 +375,8 @@ export default function RegionSalesMap() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col md:flex-row bg-zinc-50 dark:bg-zinc-950">
-      <aside className="w-full md:w-[32%] max-w-md border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 md:p-6 flex flex-col gap-6">
+    <div className="flex h-[100dvh] w-full flex-col md:flex-row bg-zinc-50 dark:bg-zinc-950">
+      <aside className="w-full md:w-[32%] max-w-md border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 md:p-6 flex flex-col gap-6 overflow-y-auto md:overflow-y-visible max-h-[55dvh] md:max-h-none">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
             창조통닭 지역별 판매량
@@ -670,7 +670,7 @@ export default function RegionSalesMap() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col min-h-[45dvh] md:min-h-0">
         <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-white/80 px-4 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/80 md:px-6">
           <span className="mr-2 font-medium text-zinc-700 dark:text-zinc-200">기간</span>
           {PERIOD_LABELS.map(({ key, label }) => (
@@ -697,7 +697,7 @@ export default function RegionSalesMap() {
           </button>
         </div>
 
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-h-[45dvh] md:min-h-0">
           <RegionMapInner
             summaries={summaries}
             onDeleteStore={handleDeleteStore}
