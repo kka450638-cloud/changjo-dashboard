@@ -55,6 +55,7 @@ export default function RegionSalesMap() {
   const [summaries, setSummaries] = useState<StoreSalesSummary[]>([]);
   const [isPending, startTransition] = useTransition();
   const [mapScrollTick, setMapScrollTick] = useState(0);
+  const [isMapOpen, setIsMapOpen] = useState(true);
 
   // 일일 판매량 입력용 상태
   const [mode, setMode] = useState<"single" | "range">("single");
@@ -320,9 +321,10 @@ export default function RegionSalesMap() {
 
   useEffect(() => {
     if (mapScrollTick <= 0) return;
+    if (!isMapOpen) setIsMapOpen(true);
     const el = document.getElementById("map-section");
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [mapScrollTick]);
+  }, [mapScrollTick, isMapOpen]);
 
   async function handleMapDetailSave() {
     if (!selectedMapStoreId || !detailDate) {
@@ -403,10 +405,20 @@ export default function RegionSalesMap() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:grid-cols-1">
           <button
             type="button"
-            onClick={() => setMapScrollTick((v) => v + 1)}
+            onClick={() => {
+              if (!isMapOpen) setIsMapOpen(true);
+              setMapScrollTick((v) => v + 1);
+            }}
             className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
           >
-            지도 보기
+            지도 열기
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsMapOpen((v) => !v)}
+            className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {isMapOpen ? "지도 닫기" : "지도 열기"}
           </button>
           <a
             href="/ranking"
@@ -694,105 +706,126 @@ export default function RegionSalesMap() {
         </div>
       </aside>
 
-      <main id="map-section" className="flex-1 flex flex-col min-h-[45dvh] md:min-h-0 bg-zinc-50 dark:bg-zinc-950">
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-white/80 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/80 md:px-6">
-          <span className="mr-2 font-medium text-zinc-700 dark:text-zinc-200">기간</span>
-          {PERIOD_LABELS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setPeriod(key)}
-              className={`rounded-full px-3 py-1 ${
-                period === key
-                  ? "bg-amber-500 text-white"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              } text-sm font-medium`}
-            >
-              {label}
-            </button>
-          ))}
-          {isPending && <span className="ml-2 text-sm text-zinc-400">로딩 중…</span>}
+      <main
+        id="map-section"
+        className={`flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 ${
+          isMapOpen ? "min-h-[45dvh] md:min-h-0" : "min-h-0"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white/80 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/80 md:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-2 font-medium text-zinc-700 dark:text-zinc-200">기간</span>
+            {PERIOD_LABELS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setPeriod(key)}
+                className={`rounded-full px-3 py-1 ${
+                  period === key
+                    ? "bg-amber-500 text-white"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                } text-sm font-medium`}
+              >
+                {label}
+              </button>
+            ))}
+            {isPending && <span className="ml-2 text-sm text-zinc-400">로딩 중…</span>}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMapOpen((v) => !v)}
+            className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {isMapOpen ? "지도 닫기" : "지도 열기"}
+          </button>
         </div>
 
-        <div className="relative flex-1 min-h-[45dvh] md:min-h-0">
-          <RegionMapInner
-            summaries={summaries}
-            onDeleteStore={handleDeleteStore}
-            onStoreSelect={setSelectedMapStoreId}
-          />
+        {isMapOpen ? (
+          <div className="relative flex-1 min-h-[45dvh] md:min-h-0">
+            <RegionMapInner
+              summaries={summaries}
+              onDeleteStore={handleDeleteStore}
+              onStoreSelect={setSelectedMapStoreId}
+            />
 
-          {/* 지도 위 선택 지점 일별 판매 패널 */}
-          {selectedMapStoreId && (
-            <div className="pointer-events-auto absolute right-3 top-3 z-[500] w-[18.5rem] rounded-xl border border-zinc-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-semibold text-zinc-800 dark:text-zinc-100">
-                  일별 판매 (조회/수정/삭제)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMapStoreId(null)}
-                  className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-                >
-                  닫기
-                </button>
-              </div>
-              <div className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-                {summaries.find((s) => s.store.id === selectedMapStoreId)?.store.name ?? "지점"} · 마커 클릭 후 날짜 선택
-              </div>
-
-              <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                날짜
-              </label>
-              <input
-                type="date"
-                value={detailDate}
-                onChange={(e) => setDetailDate(e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              />
-
-              <div className="mt-2 min-h-[1.5rem] text-sm">
-                {detailLoading ? (
-                  <span className="text-zinc-500 dark:text-zinc-400">조회 중…</span>
-                ) : (
-                  <span className="font-semibold text-amber-700 dark:text-amber-300">
-                    {detailQuantity !== null
-                      ? `${detailDate} 판매량: ${detailQuantity.toLocaleString()}마리`
-                      : "해당 일자 데이터 없음"}
+            {/* 지도 위 선택 지점 일별 판매 패널 */}
+            {selectedMapStoreId && (
+              <div className="pointer-events-auto absolute right-3 top-3 z-[500] w-[18.5rem] rounded-xl border border-zinc-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                    일별 판매 (조회/수정/삭제)
                   </span>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMapStoreId(null)}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {summaries.find((s) => s.store.id === selectedMapStoreId)?.store.name ?? "지점"} · 마커 클릭 후 날짜 선택
+                </div>
 
-              <label className="mt-3 mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                새 판매 마리 수
-              </label>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={detailEditQuantity}
-                onChange={(e) => setDetailEditQuantity(e.target.value)}
-                placeholder="예: 120"
-                className="w-full rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              />
+                <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  날짜
+                </label>
+                <input
+                  type="date"
+                  value={detailDate}
+                  onChange={(e) => setDetailDate(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
 
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleMapDetailSave}
-                  className="flex-1 rounded-lg bg-amber-500 py-2 text-center text-xs font-semibold text-white hover:bg-amber-600"
-                >
-                  수정 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={handleMapDetailDelete}
-                  className="flex-1 rounded-lg border border-red-500 py-2 text-center text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-950/30"
-                >
-                  삭제
-                </button>
+                <div className="mt-2 min-h-[1.5rem] text-sm">
+                  {detailLoading ? (
+                    <span className="text-zinc-500 dark:text-zinc-400">조회 중…</span>
+                  ) : (
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">
+                      {detailQuantity !== null
+                        ? `${detailDate} 판매량: ${detailQuantity.toLocaleString()}마리`
+                        : "해당 일자 데이터 없음"}
+                    </span>
+                  )}
+                </div>
+
+                <label className="mt-3 mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  새 판매 마리 수
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={detailEditQuantity}
+                  onChange={(e) => setDetailEditQuantity(e.target.value)}
+                  placeholder="예: 120"
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleMapDetailSave}
+                    className="flex-1 rounded-lg bg-amber-500 py-2 text-center text-xs font-semibold text-white hover:bg-amber-600"
+                  >
+                    수정 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMapDetailDelete}
+                    className="flex-1 rounded-lg border border-red-500 py-2 text-center text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-950/30"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-6 text-sm text-zinc-500 dark:text-zinc-400">
+            지도가 닫혀있습니다. 필요할 때 <span className="mx-1 font-semibold text-amber-600 dark:text-amber-400">지도 열기</span>를 눌러주세요.
+          </div>
+        )}
       </main>
 
       {/* AI 리포트 패널 (슬라이드) */}
