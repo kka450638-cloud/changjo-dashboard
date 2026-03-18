@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # NEXT_PUBLIC_* 값은 클라이언트 번들에 포함되는 공개 값입니다.
+  # Netlify secrets scanner 오탐지로 빌드가 중단되는 것을 방지합니다.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_SUPABASE_URL"
+
