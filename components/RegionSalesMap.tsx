@@ -385,7 +385,11 @@ export default function RegionSalesMap() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col md:flex-row bg-zinc-50 dark:bg-zinc-950">
-      <aside className="w-full md:w-[32%] max-w-md border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 md:p-6 flex flex-col gap-6 overflow-y-auto md:overflow-y-visible max-h-[55dvh] md:max-h-none">
+      <aside
+        className={`w-full md:w-[32%] max-w-md border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 md:p-6 flex flex-col gap-6 overflow-y-auto md:overflow-y-visible ${
+          isMapOpen ? "max-h-[55dvh]" : "max-h-[100dvh]"
+        } md:max-h-none`}
+      >
         <div>
           <h1 className="text-xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
             창조통닭 지역별 판매량
@@ -708,8 +712,8 @@ export default function RegionSalesMap() {
 
       <main
         id="map-section"
-        className={`flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 ${
-          isMapOpen ? "min-h-[45dvh] md:min-h-0" : "min-h-0"
+        className={`flex flex-col bg-zinc-50 dark:bg-zinc-950 ${
+          isMapOpen ? "flex-1 min-h-[45dvh] md:min-h-0" : "flex-none"
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white/80 px-4 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/80 md:px-6">
@@ -740,16 +744,21 @@ export default function RegionSalesMap() {
           </button>
         </div>
 
-        {isMapOpen ? (
-          <div className="relative flex-1 min-h-[45dvh] md:min-h-0">
+        <div
+          className={`relative ${
+            isMapOpen ? "flex-1 min-h-[45dvh] md:min-h-0" : "h-0 overflow-hidden"
+          }`}
+        >
+          {isMapOpen && (
             <RegionMapInner
               summaries={summaries}
               onDeleteStore={handleDeleteStore}
               onStoreSelect={setSelectedMapStoreId}
             />
+          )}
 
-            {/* 지도 위 선택 지점 일별 판매 패널 */}
-            {selectedMapStoreId && (
+          {/* 지도 위 선택 지점 일별 판매 패널 */}
+          {isMapOpen && selectedMapStoreId && (
               <div className="pointer-events-auto absolute right-3 top-3 z-[500] w-[18.5rem] rounded-xl border border-zinc-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
                 <div className="mb-1 flex items-center justify-between">
                   <span className="font-semibold text-zinc-800 dark:text-zinc-100">
@@ -819,13 +828,8 @@ export default function RegionSalesMap() {
                   </button>
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-1 items-center justify-center p-6 text-sm text-zinc-500 dark:text-zinc-400">
-            지도가 닫혀있습니다. 필요할 때 <span className="mx-1 font-semibold text-amber-600 dark:text-amber-400">지도 열기</span>를 눌러주세요.
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {/* AI 리포트 패널 (슬라이드) */}
