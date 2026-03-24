@@ -769,15 +769,15 @@ function csvEscapeField(value: string): string {
 }
 
 /**
- * 선택 기간 + (선택) 시/도·지점 검색 필터로 지점별 누적 판매 CSV (UTF-8 BOM, 엑셀 호환)
+ * CSV / Google Sheets 보내기와 동일한 필터로 지점별 판매 요약 목록
  */
-export async function buildFilteredStoreSalesCsv(params: {
+export async function getFilteredStoreSummariesForExport(params: {
   period: PeriodKey;
   /** 시/도 드롭다운과 동일: region 첫 토큰 일치 */
   sidoFilter?: string;
   /** 지점 검색어(이름·지역·전화) */
   searchQuery?: string;
-}): Promise<string> {
+}): Promise<StoreSalesSummary[]> {
   let summaries = await getStoreSummaries(params.period);
 
   if (params.sidoFilter?.trim()) {
@@ -802,6 +802,21 @@ export async function buildFilteredStoreSalesCsv(params: {
       ),
     );
   }
+
+  return summaries;
+}
+
+/**
+ * 선택 기간 + (선택) 시/도·지점 검색 필터로 지점별 누적 판매 CSV (UTF-8 BOM, 엑셀 호환)
+ */
+export async function buildFilteredStoreSalesCsv(params: {
+  period: PeriodKey;
+  /** 시/도 드롭다운과 동일: region 첫 토큰 일치 */
+  sidoFilter?: string;
+  /** 지점 검색어(이름·지역·전화) */
+  searchQuery?: string;
+}): Promise<string> {
+  const summaries = await getFilteredStoreSummariesForExport(params);
 
   const headers = [
     "store_id",

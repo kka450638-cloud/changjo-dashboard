@@ -12,6 +12,10 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import type { StoreSalesSummary } from "@/lib/types/store";
 import {
+  appendFilteredSalesToGoogleSheet,
+  getGoogleSheetsExportStatus,
+} from "@/app/actions/googleSheets";
+import {
   addSale,
   addSaleRange,
   buildFilteredStoreSalesCsv,
@@ -91,6 +95,10 @@ export default function RegionSalesMap({
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [csvExportPending, setCsvExportPending] = useState(false);
+  const [sheetsExportPending, setSheetsExportPending] = useState(false);
+  const [sheetsExportConfigured, setSheetsExportConfigured] = useState<
+    boolean | null
+  >(null);
 
   // 일일 판매량 입력용 상태
   const [mode, setMode] = useState<"single" | "range">("single");
@@ -303,6 +311,46 @@ export default function RegionSalesMap({
       toast.error(err instanceof Error ? err.message : "CSV보내기에 실패했습니다.");
     } finally {
       setCsvExportPending(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    getGoogleSheetsExportStatus()
+      .then(({ configured }) => {
+        if (!cancelled) setSheetsExportConfigured(configured);
+      })
+      .catch(() => {
+        if (!cancelled) setSheetsExportConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleExportSheets() {
+    if (sheetsExportConfigured === false) {
+      toast.error(
+        "Sheets 보내기: .env에 스프레드시트 ID·서비스 계정 JSON을 넣고, 서비스 계정 이메일을 시트에 편집자로 공유하세요.",
+      );
+      return;
+    }
+    setSheetsExportPending(true);
+    try {
+      const { appendedRows, dataRows, includeHeader } =
+        await appendFilteredSalesToGoogleSheet({
+          period,
+          sidoFilter: selectedSido.trim() || undefined,
+          searchQuery: storeSearch.trim() || undefined,
+        });
+      const head = includeHeader ? "헤더 1행 + " : "";
+      toast.success(
+        `Google 시트에 ${head}지점 ${dataRows}행(총 ${appendedRows}행)을 추가했습니다.`,
+      );
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Sheets 보내기에 실패했습니다.");
+    } finally {
+      setSheetsExportPending(false);
     }
   }
 
@@ -1123,19 +1171,46 @@ export default function RegionSalesMap({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              상단 <strong>기간</strong>, 위 폼의 <strong>시/도</strong>, <strong>지점 검색</strong>어가 CSV에
-              반영됩니다. UTF-8(BOM)으로 엑셀에서 열 수 있습니다.
+              상단 <strong>기간</strong>, 위 폼의 <strong>시/도</strong>, <strong>지점 검색</strong>어가 CSV·
+              Google 시트에 동일하게 반영됩니다. CSV는 UTF-8(BOM)으로 엑셀에서 열 수 있습니다.
             </p>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={csvExportPending}
-              className="shrink-0 rounded-lg border border-zinc-400 bg-white px-3 py-1.5 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
-              aria-label="필터가 적용된 지점 판매 데이터 CSV 다운로드"
-              aria-busy={csvExportPending}
-            >
-              {csvExportPending ? "CSV 만드는 중…" : "CSV 다운로드"}
-            </button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={csvExportPending}
+                className="rounded-lg border border-zinc-400 bg-white px-3 py-1.5 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                aria-label="필터가 적용된 지점 판매 데이터 CSV 다운로드"
+                aria-busy={csvExportPending}
+              >
+                {csvExportPending ? "CSV 만드는 중…" : "CSV 다운로드"}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportSheets}
+                disabled={
+                  sheetsExportPending ||
+                  sheetsExportConfigured === false ||
+                  sheetsExportConfigured === null
+                }
+                title={
+                  sheetsExportConfigured === false
+                    ? ".env에 GOOGLE_SHEETS_SPREADSHEET_ID와 서비스 계정 JSON을 설정하세요."
+                    : sheetsExportConfigured === null
+                      ? "설정 확인 중…"
+                      : "연결된 스프레드시트 하단에 행 추가 (헤더 1행 + 데이터)"
+                }
+                className="rounded-lg border border-emerald-600/70 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/50 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/50"
+                aria-label="필터가 적용된 지점 판매 데이터를 Google 스프레드시트에 추가"
+                aria-busy={sheetsExportPending}
+              >
+                {sheetsExportPending
+                  ? "Sheets에 보내는 중…"
+                  : sheetsExportConfigured === null
+                    ? "Sheets 확인 중…"
+                    : "Sheets에 추가"}
+              </button>
+            </div>
           </div>
           <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 dark:border-zinc-600 dark:bg-zinc-900/40">
             <p className="border-b border-zinc-200 px-2 py-1.5 text-[10px] font-medium text-zinc-600 dark:border-zinc-600 dark:text-zinc-300">
