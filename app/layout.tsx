@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "창조통닭 가맹점 지도 대시보드",
-  description: "가맹점 정보를 지도에 시각화하는 관리자 대시보드",
+  title: "창조 지점 관리",
+  description: "가맹점·일일 판매를 지도에서 관리하는 대시보드",
 };
 
 export default function RootLayout({

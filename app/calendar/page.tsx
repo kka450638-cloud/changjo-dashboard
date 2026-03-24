@@ -8,6 +8,7 @@ import {
   type DailyTotal,
 } from "@/app/actions/sales";
 import Link from "next/link";
+import AdminLogoutButton from "@/components/AdminLogoutButton";
 
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -101,12 +102,15 @@ export default function CalendarPage() {
             전체 DB 기준으로 날짜별 총 판매 마리 수와 지점별 판매를 확인합니다.
           </p>
         </div>
-        <Link
-          href="/"
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          지도 대시보드로 돌아가기
-        </Link>
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+          <Link
+            href="/"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            지도 대시보드로 돌아가기
+          </Link>
+          <AdminLogoutButton className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700" />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col gap-6 p-4 md:flex-row md:p-8">
@@ -203,7 +207,7 @@ export default function CalendarPage() {
         </section>
 
         <section className="w-full md:w-[45%]">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                 {selectedDate ?? "날짜를 선택하세요"}
@@ -212,6 +216,14 @@ export default function CalendarPage() {
                 선택한 날짜의 지점별 판매 마리 수 (전체 DB 기준)
               </p>
             </div>
+            {selectedDate && (
+              <Link
+                href={`/?mapDate=${encodeURIComponent(selectedDate)}`}
+                className="shrink-0 rounded-lg border border-amber-500 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-400 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/60"
+              >
+                지도에서 이 날짜 보기
+              </Link>
+            )}
           </div>
 
           <div className="mt-3 h-[420px] overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

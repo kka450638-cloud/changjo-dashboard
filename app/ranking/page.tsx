@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { getStoreSummaries, type PeriodKey } from "@/app/actions/sales";
 import type { StoreSalesSummary } from "@/lib/types/store";
 import Link from "next/link";
+import AdminLogoutButton from "@/components/AdminLogoutButton";
 
 const PERIOD_LABELS: { key: PeriodKey; label: string }[] = [
   { key: "yesterday", label: "전일" },
@@ -69,12 +70,15 @@ export default function RankingPage() {
             기간별 Top/Bottom 지점과 시·도별 지점 수/판매량을 한눈에 봅니다.
           </p>
         </div>
-        <Link
-          href="/"
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          지도 대시보드로 돌아가기
-        </Link>
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+          <Link
+            href="/"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            지도 대시보드로 돌아가기
+          </Link>
+          <AdminLogoutButton className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700" />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col gap-6 p-4 md:flex-row md:p-8">

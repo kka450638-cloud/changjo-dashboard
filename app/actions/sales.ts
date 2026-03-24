@@ -1,6 +1,7 @@
  "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { storeMatchesSearchQuery } from "@/lib/storeSearch";
 import type { Store, StoreSalesSummary } from "@/lib/types/store";
 
 export type PeriodKey = "yesterday" | "1w" | "1m" | "6m" | "all";
@@ -210,6 +211,46 @@ export async function updateSale(params: {
   }
 }
 
+/** 지도·빠른 입력용: 해당 일자 행이 없으면 insert, 있으면 update */
+export async function upsertSaleForStoreDate(params: {
+  storeId: string;
+  salesDate: string;
+  quantity: number;
+}): Promise<void> {
+  const supabase = createClient();
+  const { storeId, salesDate, quantity } = params;
+  const qty = Math.floor(Number(quantity));
+  if (Number.isNaN(qty) || qty < 0) {
+    throw new Error("판매 마리 수는 0 이상의 숫자로 입력해주세요.");
+  }
+
+  const { data: existing, error: selErr } = await supabase
+    .from("sales_logs")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("sales_date", salesDate)
+    .limit(1);
+
+  if (selErr) throw new Error(selErr.message);
+
+  if (existing && existing.length > 0) {
+    const { error } = await supabase
+      .from("sales_logs")
+      .update({ quantity: qty })
+      .eq("store_id", storeId)
+      .eq("sales_date", salesDate);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await supabase.from("sales_logs").insert({
+    store_id: storeId,
+    sales_date: salesDate,
+    quantity: qty,
+  });
+  if (error) throw new Error(error.message);
+}
+
 // ---------- 기간별 합산 (모든 지점 + 0 포함) ----------
 
 export async function getStoreSummaries(period: PeriodKey): Promise<StoreSalesSummary[]> {
@@ -398,5 +439,393 @@ export async function getDailyStoreTotals(
   return Array.from(map.values()).sort(
     (a, b) => b.totalQuantity - a.totalQuantity,
   );
+}
+
+// ---------- 전일 대비 (지점·시·도) / 특정일 지점별 수량 / 차트용 기간 ----------
+
+/** 어제·그전날 YYYY-MM-DD (서버 로컬 달력 기준) */
+function getYesterdayAndPrevDates(): { yesterday: string; prevDay: string } {
+  const today = new Date();
+  const y = new Date(today);
+  y.setDate(y.getDate() - 1);
+  const p = new Date(today);
+  p.setDate(p.getDate() - 2);
+  return {
+    yesterday: y.toISOString().slice(0, 10),
+    prevDay: p.toISOString().slice(0, 10),
+  };
+}
+
+function parseSidoFromRegion(region: string | null | undefined): string {
+  if (!region?.trim()) return "기타";
+  const first = region.trim().split(/\s+/)[0];
+  return first || "기타";
+}
+
+export type StoreDayOver = {
+  storeId: string;
+  yesterdayQty: number;
+  prevDayQty: number;
+  delta: number;
+};
+
+export type SidoDayOver = {
+  sido: string;
+  yesterdayQty: number;
+  prevDayQty: number;
+  delta: number;
+};
+
+/** 어제 vs 그전날 지점별·시도별 합계 */
+export async function getDayOverDayComparison(): Promise<{
+  yesterdayDate: string;
+  prevDate: string;
+  byStore: StoreDayOver[];
+  bySido: SidoDayOver[];
+}> {
+  const supabase = createClient();
+  const { yesterday, prevDay } = getYesterdayAndPrevDates();
+
+  const { data: logRows, error: logError } = await supabase
+    .from("sales_logs")
+    .select("store_id, sales_date, quantity")
+    .in("sales_date", [yesterday, prevDay]);
+
+  if (logError) throw new Error(logError.message);
+
+  type LogRow = { store_id: string; sales_date: string; quantity: number };
+  const logs = (logRows ?? []) as LogRow[];
+
+  const yMap = new Map<string, number>();
+  const pMap = new Map<string, number>();
+  for (const row of logs) {
+    const sid = String(row.store_id ?? "");
+    const q = Number(row.quantity ?? 0);
+    if (!sid) continue;
+    if (row.sales_date === yesterday) {
+      yMap.set(sid, (yMap.get(sid) ?? 0) + q);
+    } else if (row.sales_date === prevDay) {
+      pMap.set(sid, (pMap.get(sid) ?? 0) + q);
+    }
+  }
+
+  const { data: stores, error: storeError } = await supabase
+    .from("stores")
+    .select("id, region");
+
+  if (storeError) throw new Error(storeError.message);
+
+  type StoreRow = { id: string; region: string | null };
+  const storeList = (stores ?? []) as StoreRow[];
+
+  const byStore: StoreDayOver[] = storeList.map((s) => {
+    const yesterdayQty = yMap.get(s.id) ?? 0;
+    const prevDayQty = pMap.get(s.id) ?? 0;
+    return {
+      storeId: s.id,
+      yesterdayQty,
+      prevDayQty,
+      delta: yesterdayQty - prevDayQty,
+    };
+  });
+
+  const sidoY = new Map<string, number>();
+  const sidoP = new Map<string, number>();
+  for (const s of storeList) {
+    const sido = parseSidoFromRegion(s.region);
+    sidoY.set(sido, (sidoY.get(sido) ?? 0) + (yMap.get(s.id) ?? 0));
+    sidoP.set(sido, (sidoP.get(sido) ?? 0) + (pMap.get(s.id) ?? 0));
+  }
+
+  const sidoKeys = new Set([...sidoY.keys(), ...sidoP.keys()]);
+  const bySido: SidoDayOver[] = Array.from(sidoKeys).map((sido) => {
+    const yesterdayQty = sidoY.get(sido) ?? 0;
+    const prevDayQty = sidoP.get(sido) ?? 0;
+    return { sido, yesterdayQty, prevDayQty, delta: yesterdayQty - prevDayQty };
+  });
+  bySido.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  return {
+    yesterdayDate: yesterday,
+    prevDate: prevDay,
+    byStore,
+    bySido,
+  };
+}
+
+/** 특정 일자 지점별 판매 합계 (지도 필터용) */
+export async function getQuantitiesByStoreForDate(
+  salesDate: string,
+): Promise<Record<string, number>> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("sales_logs")
+    .select("store_id, quantity")
+    .eq("sales_date", salesDate);
+
+  if (error) throw new Error(error.message);
+
+  type Row = { store_id: string; quantity: number };
+  const rows = (data ?? []) as Row[];
+  const map: Record<string, number> = {};
+  for (const row of rows) {
+    const id = String(row.store_id ?? "");
+    if (!id) continue;
+    map[id] = (map[id] ?? 0) + Number(row.quantity ?? 0);
+  }
+  return map;
+}
+
+function getChartBoundsForPeriod(period: PeriodKey): { startStr: string; endStr: string } {
+  const end = new Date();
+  const endStr = end.toISOString().slice(0, 10);
+  let startStr: string;
+  if (period === "yesterday") {
+    const s = new Date();
+    s.setDate(s.getDate() - 7);
+    startStr = s.toISOString().slice(0, 10);
+  } else if (period === "all") {
+    const s = new Date();
+    s.setFullYear(s.getFullYear() - 1);
+    startStr = s.toISOString().slice(0, 10);
+  } else {
+    const from = getFromDate(period);
+    startStr = from ?? "1970-01-01";
+  }
+  return { startStr, endStr };
+}
+
+/** 선택 기간과 맞춘 일별 전체 판매 추이 (차트용). 전일만 선택 시 최근 7일 포함 */
+export async function getDailyTotalsForChartPeriod(
+  period: PeriodKey,
+): Promise<DailyTotal[]> {
+  const { startStr, endStr } = getChartBoundsForPeriod(period);
+  return getDailyTotals({ startDate: startStr, endDate: endStr });
+}
+
+function regionStringFromStoresJoin(rawStores: unknown): string | null {
+  if (rawStores == null || typeof rawStores !== "object") return null;
+  if (Array.isArray(rawStores)) {
+    const first = rawStores[0] as { region?: unknown } | undefined;
+    if (first && typeof first === "object" && "region" in first) {
+      return first.region == null ? null : String(first.region);
+    }
+    return null;
+  }
+  const s = rawStores as { region?: unknown };
+  return s.region == null ? null : String(s.region);
+}
+
+function sidoFromRegionString(region: string | null): string {
+  if (!region?.trim()) return "기타";
+  const p = region.trim().split(/\s+/);
+  return p[0] || "기타";
+}
+
+/** 시·도 + 구/군 (앞 두 토큰), 없으면 시·도만 */
+function sigunguLabelFromRegionString(region: string | null): string {
+  if (!region?.trim()) return "기타";
+  const p = region.trim().split(/\s+/);
+  if (p.length >= 2) return `${p[0]} ${p[1]}`;
+  return p[0] || "기타";
+}
+
+function addOneCalendarDay(ymd: string): string {
+  const [y, mo, da] = ymd.split("-").map(Number);
+  const dt = new Date(y, mo - 1, da);
+  dt.setDate(dt.getDate() + 1);
+  const y2 = dt.getFullYear();
+  const m2 = String(dt.getMonth() + 1).padStart(2, "0");
+  const d2 = String(dt.getDate()).padStart(2, "0");
+  return `${y2}-${m2}-${d2}`;
+}
+
+function enumerateDateStrRange(startStr: string, endStr: string): string[] {
+  const out: string[] = [];
+  let cur = startStr;
+  let guard = 0;
+  while (cur <= endStr && guard < 800) {
+    out.push(cur);
+    if (cur === endStr) break;
+    cur = addOneCalendarDay(cur);
+    guard += 1;
+  }
+  return out;
+}
+
+export type SigunguBarPoint = { label: string; total: number };
+
+export type RegionChartSeriesPayload = {
+  /** 멀티 라인용 (시·도별, 상위 N + 기타) */
+  trendRows: Record<string, string | number>[];
+  trendKeys: string[];
+  /** 시·도·구 누적 막대 */
+  sigunguBars: SigunguBarPoint[];
+};
+
+const TREND_TOP_SIDO = 8;
+const BAR_TOP_SIGUNGU = 16;
+
+/**
+ * 차트용: 기간 내 일자×시·도 추이 + 시·도·구 누적 막대 (한 번에 조회)
+ */
+export async function getChartRegionSeries(
+  period: PeriodKey,
+): Promise<RegionChartSeriesPayload> {
+  const { startStr, endStr } = getChartBoundsForPeriod(period);
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("sales_logs")
+    .select(
+      `
+      sales_date,
+      quantity,
+      stores ( region )
+    `,
+    )
+    .gte("sales_date", startStr)
+    .lte("sales_date", endStr);
+
+  if (error) throw new Error(error.message);
+
+  type RawRow = { sales_date?: unknown; quantity?: unknown; stores?: unknown };
+  const byDateSido = new Map<string, Map<string, number>>();
+  const totalsSido = new Map<string, number>();
+  const totalsSigungu = new Map<string, number>();
+
+  for (const item of (data ?? []) as RawRow[]) {
+    const salesDate = String(item.sales_date ?? "");
+    const q = Number(item.quantity ?? 0);
+    if (!salesDate || q === 0) continue;
+    const region = regionStringFromStoresJoin(item.stores);
+    const sido = sidoFromRegionString(region);
+    const sg = sigunguLabelFromRegionString(region);
+
+    totalsSido.set(sido, (totalsSido.get(sido) ?? 0) + q);
+    totalsSigungu.set(sg, (totalsSigungu.get(sg) ?? 0) + q);
+
+    let dayMap = byDateSido.get(salesDate);
+    if (!dayMap) {
+      dayMap = new Map();
+      byDateSido.set(salesDate, dayMap);
+    }
+    dayMap.set(sido, (dayMap.get(sido) ?? 0) + q);
+  }
+
+  const sortedSidos = [...totalsSido.entries()].sort((a, b) => b[1] - a[1]);
+  const topSidoKeys = sortedSidos.slice(0, TREND_TOP_SIDO).map(([k]) => k);
+  const topSet = new Set(topSidoKeys);
+
+  let hasEtc = false;
+  for (const smap of byDateSido.values()) {
+    for (const [sido, qty] of smap) {
+      if (!topSet.has(sido) && qty > 0) {
+        hasEtc = true;
+        break;
+      }
+    }
+    if (hasEtc) break;
+  }
+
+  const trendKeys = hasEtc ? [...topSidoKeys, "기타"] : [...topSidoKeys];
+  const allDates = enumerateDateStrRange(startStr, endStr);
+
+  const trendRows: Record<string, string | number>[] = allDates.map((salesDate) => {
+    const row: Record<string, string | number> = {
+      salesDate,
+      label: salesDate.slice(5),
+    };
+    const smap = byDateSido.get(salesDate);
+    let etc = 0;
+    for (const key of topSidoKeys) {
+      row[key] = smap?.get(key) ?? 0;
+    }
+    if (hasEtc) {
+      if (smap) {
+        for (const [sido, qty] of smap) {
+          if (!topSet.has(sido)) etc += qty;
+        }
+      }
+      row["기타"] = etc;
+    }
+    return row;
+  });
+
+  const sigunguBars: SigunguBarPoint[] = [...totalsSigungu.entries()]
+    .filter(([, t]) => t > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, BAR_TOP_SIGUNGU)
+    .map(([label, total]) => ({ label, total }));
+
+  return { trendRows, trendKeys, sigunguBars };
+}
+
+function csvEscapeField(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+/**
+ * 선택 기간 + (선택) 시/도·지점 검색 필터로 지점별 누적 판매 CSV (UTF-8 BOM, 엑셀 호환)
+ */
+export async function buildFilteredStoreSalesCsv(params: {
+  period: PeriodKey;
+  /** 시/도 드롭다운과 동일: region 첫 토큰 일치 */
+  sidoFilter?: string;
+  /** 지점 검색어(이름·지역·전화) */
+  searchQuery?: string;
+}): Promise<string> {
+  let summaries = await getStoreSummaries(params.period);
+
+  if (params.sidoFilter?.trim()) {
+    const sf = params.sidoFilter.trim();
+    summaries = summaries.filter((s) => {
+      const region = s.store.region ?? "";
+      const first = region.trim().split(/\s+/)[0] ?? "";
+      return first === sf;
+    });
+  }
+
+  if (params.searchQuery?.trim()) {
+    const q = params.searchQuery;
+    summaries = summaries.filter((s) =>
+      storeMatchesSearchQuery(
+        {
+          name: s.store.name,
+          region: s.store.region ?? "",
+          managerPhone: s.store.managerPhone ?? "",
+        },
+        q,
+      ),
+    );
+  }
+
+  const headers = [
+    "store_id",
+    "store_name",
+    "region",
+    "manager_phone",
+    "total_quantity_mari",
+    "period_key",
+  ];
+
+  const lines = [
+    headers.join(","),
+    ...summaries.map(({ store, totalQuantity }) =>
+      [
+        csvEscapeField(store.id),
+        csvEscapeField(store.name),
+        csvEscapeField(store.region ?? ""),
+        csvEscapeField(store.managerPhone ?? ""),
+        csvEscapeField(String(totalQuantity)),
+        csvEscapeField(params.period),
+      ].join(","),
+    ),
+  ];
+
+  return `\uFEFF${lines.join("\r\n")}`;
 }
 

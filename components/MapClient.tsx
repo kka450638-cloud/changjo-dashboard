@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/sales";
 import type { StoreSalesSummary } from "@/lib/types/store";
 import Link from "next/link";
+import AdminLogoutButton from "@/components/AdminLogoutButton";
 import { toast } from "sonner";
 
 const RegionMapInner = dynamic(() => import("@/components/RegionMapInner"), {
@@ -149,6 +150,9 @@ export default function MapClient({ initialPeriod }: { initialPeriod: PeriodKey 
           </button>
         ))}
         {isPending && <span className="text-xs text-zinc-400">로딩 중…</span>}
+        <div className="ml-auto flex items-center gap-2">
+          <AdminLogoutButton className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+        </div>
       </header>
 
       <div className="relative flex-1 min-h-0">

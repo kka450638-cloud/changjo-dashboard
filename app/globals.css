@@ -29,6 +29,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* 키보드 포커스 가시성 (접근성) */
+:focus-visible {
+  outline: 2px solid var(--brand-dark);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* Leaflet 지도가 모달/헤더를 덮지 않도록 z-index 낮추기 */
 .leaflet-container {
   z-index: 0 !important;
