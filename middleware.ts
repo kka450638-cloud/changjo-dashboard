@@ -7,6 +7,11 @@ const ADMIN_COOKIE = "changjo_admin_ok";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /** API는 라우트 핸들러에서 인증·오류 형식 처리 (HTML 리다이렉트 방지) */
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/login")) {
     if (request.cookies.get(ADMIN_COOKIE)?.value === "1") {
       return NextResponse.redirect(new URL("/", request.url));

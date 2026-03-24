@@ -29,7 +29,7 @@ import {
   type RegionChartSeriesPayload,
   type SidoDayOver,
 } from "@/app/actions/sales";
-import { generateAiReport } from "@/app/actions/report";
+import { consumeOpenAiSseStream } from "@/lib/openaiSse";
 import { toast } from "sonner";
 import AdminLogoutButton from "@/components/AdminLogoutButton";
 import DashboardCharts from "@/components/DashboardCharts";
@@ -113,7 +113,7 @@ export default function RegionSalesMap({
   const [editQuantity, setEditQuantity] = useState("");
   // AI 리포트
   const [reportPending, setReportPending] = useState(false);
-  const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [reportMarkdown, setReportMarkdown] = useState<string>("");
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportPanelOpen, setReportPanelOpen] = useState(false);
   // 지도에서 선택한 지점 → 날짜별 판매량 보기
@@ -505,15 +505,55 @@ export default function RegionSalesMap({
   async function handleGenerateReport() {
     setReportPending(true);
     setReportError(null);
-    setReportMarkdown(null);
+    setReportMarkdown("");
     setReportPanelOpen(true);
-    const result = await generateAiReport(period);
-    setReportPending(false);
-    if (result.ok) {
-      setReportMarkdown(result.markdown);
-    } else {
-      setReportError(result.error);
-      toast.error(result.error);
+    try {
+      const res = await fetch("/api/ai-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ period }),
+      });
+
+      if (res.status === 401) {
+        const msg = "로그인이 필요합니다. 다시 로그인해 주세요.";
+        setReportError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      if (!res.ok) {
+        let msg = `리포트 요청 실패 (${res.status})`;
+        try {
+          const j = (await res.json()) as { error?: string; detail?: string };
+          if (j.error) msg = j.error;
+          if (j.detail) msg += `: ${j.detail.slice(0, 120)}`;
+        } catch {
+          const t = await res.text();
+          if (t) msg = t.slice(0, 200);
+        }
+        setReportError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const ctype = res.headers.get("content-type") ?? "";
+      if (!res.body || !ctype.includes("event-stream")) {
+        setReportError("스트림 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        toast.error("AI 스트림 연결에 실패했습니다.");
+        return;
+      }
+
+      await consumeOpenAiSseStream(res.body, (delta) => {
+        setReportMarkdown((prev) => prev + delta);
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "네트워크 오류가 발생했습니다.";
+      setReportError(message);
+      toast.error(message);
+    } finally {
+      setReportPending(false);
     }
   }
 
@@ -1414,7 +1454,7 @@ export default function RegionSalesMap({
                 type="button"
                 onClick={() => {
                   setReportPanelOpen(false);
-                  setReportMarkdown(null);
+                  setReportMarkdown("");
                   setReportError(null);
                 }}
                 className="rounded p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
@@ -1424,11 +1464,9 @@ export default function RegionSalesMap({
               </button>
             </div>
             <div className="max-h-[80vh] overflow-y-auto p-4">
-              {reportPending && (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  선택한 기간 데이터로 1만 지점 목표 관점의 일일 리포트를 작성 중입니다…
-                </p>
-              )}
+              <p className="mb-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+                OpenAI로 스트리밍 생성됩니다. 네트워크가 끊기면 「다시 시도」를 눌러 주세요.
+              </p>
               {reportError && !reportPending && (
                 <div className="space-y-2" role="alert">
                   <p className="text-sm text-red-600 dark:text-red-400">{reportError}</p>
@@ -1442,9 +1480,30 @@ export default function RegionSalesMap({
                   </button>
                 </div>
               )}
-              {reportMarkdown && !reportPending && (
-                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                  {reportMarkdown}
+              {reportPending && reportMarkdown === "" && !reportError && (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400" role="status">
+                  스트림 연결 중… 집계 데이터를 전송했습니다.
+                </p>
+              )}
+              {(reportMarkdown.length > 0 || (!reportPending && !reportError)) && (
+                <div
+                  className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-300"
+                  aria-live="polite"
+                  aria-busy={reportPending}
+                >
+                  {reportMarkdown.length > 0 ? (
+                    <>
+                      {reportMarkdown}
+                      {reportPending ? (
+                        <span
+                          className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-500 align-middle"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </>
+                  ) : !reportPending && !reportError ? (
+                    <span className="text-zinc-400">생성된 텍스트가 없습니다.</span>
+                  ) : null}
                 </div>
               )}
             </div>

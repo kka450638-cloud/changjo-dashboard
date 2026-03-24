@@ -37,12 +37,17 @@ export default function AdminLoginForm({ redirectTo }: Props) {
           aria-describedby={state?.error ? "admin-pin-error" : "admin-pin-hint"}
         />
         <p id="admin-pin-hint" className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          <strong className="text-zinc-700 dark:text-zinc-300">테스트 기본값:</strong> 번호{" "}
+          <strong className="text-zinc-700 dark:text-zinc-300">로컬 개발:</strong>{" "}
+          <code className="rounded bg-zinc-200 px-1 py-0.5 text-[11px] dark:bg-zinc-700">
+            ADMIN_ACCESS_CODE
+          </code>
+          미설정 시 기본{" "}
           <code className="rounded bg-zinc-200 px-1 py-0.5 text-[11px] dark:bg-zinc-700">
             0000
           </code>
-          &nbsp;· 운영 시에는 반드시 <code className="text-[11px]">.env</code>의{" "}
-          <code className="text-[11px]">ADMIN_ACCESS_CODE</code>를 변경하세요.
+          . <strong className="text-zinc-700 dark:text-zinc-300">프로덕션</strong>에서는 반드시{" "}
+          <code className="text-[11px]">ADMIN_ACCESS_CODE</code>를 설정해야 하며, 연속 실패 시 일시
+          잠금(rate limit)이 적용됩니다.
         </p>
         {state?.error ? (
           <p

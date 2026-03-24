@@ -42,10 +42,16 @@ export default function StoreForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">지점명</label>
+        <label
+          htmlFor="store-form-name"
+          className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          지점명
+        </label>
         <div className="relative">
           <Store className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
+            id="store-form-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -55,10 +61,16 @@ export default function StoreForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">도로명 주소 *</label>
+        <label
+          htmlFor="store-form-address"
+          className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          도로명 주소 *
+        </label>
         <div className="relative">
           <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
+            id="store-form-address"
             type="text"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -69,12 +81,16 @@ export default function StoreForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <label
+          htmlFor="store-form-revenue"
+          className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
           일 판매 닭 수 (마리)
         </label>
         <div className="relative">
           <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
+            id="store-form-revenue"
             type="number"
             min="0"
             step="1"
@@ -86,10 +102,16 @@ export default function StoreForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">기존 업종</label>
+        <label
+          htmlFor="store-form-category"
+          className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          기존 업종
+        </label>
         <div className="relative">
           <UtensilsCrossed className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <select
+            id="store-form-category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="w-full appearance-none rounded-lg border border-zinc-300 bg-white py-2.5 pl-10 pr-8 text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import SupabaseEnvMissing from "@/components/SupabaseEnvMissing";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,12 +24,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabaseReady = isSupabaseConfigured();
+
   return (
     <html lang="ko">
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-zinc-50 antialiased dark:bg-zinc-950 text-[15px] md:text-[16px]`}
       >
-        {children}
+        {supabaseReady ? children : <SupabaseEnvMissing />}
       </body>
     </html>
   );
