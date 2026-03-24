@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
+import { storeFromSupabaseRow, type SupabaseStoreRow } from "@/lib/storeMapper";
 import type { Store } from "@/lib/types/store";
 import StoreForm from "./StoreForm";
 
@@ -25,7 +26,11 @@ export default function Dashboard() {
       .from("stores")
       .select("*")
       .order("created_at", { ascending: false });
-    if (!error) setStores((data as Store[]) ?? []);
+    if (!error) {
+      setStores(
+        (data ?? []).map((row) => storeFromSupabaseRow(row as SupabaseStoreRow)),
+      );
+    }
     setLoading(false);
   }, []);
 

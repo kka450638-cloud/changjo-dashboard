@@ -41,4 +41,29 @@ describe("storeMatchesSearchQuery", () => {
   it("짧은 숫자 검색은 전화 매칭 안 함", () => {
     expect(storeMatchesSearchQuery(base, "12")).toBe(false);
   });
+
+  it("공백으로 나뉜 지역 키워드는 행정구역 전체 문장과 달라도 AND 매칭", () => {
+    const busan = {
+      name: "해운대점",
+      region: "부산광역시 해운대구",
+      managerPhone: "010-2000-3000",
+    };
+    expect(storeMatchesSearchQuery(busan, "부산 해운대")).toBe(true);
+    expect(storeMatchesSearchQuery(busan, "부산 해운대구")).toBe(true);
+    expect(storeMatchesSearchQuery(busan, "서울 강남")).toBe(false);
+  });
+
+  it("하이픈 포함 전화번호 전체 검색", () => {
+    expect(storeMatchesSearchQuery(base, "010-9999-8888")).toBe(true);
+    expect(storeMatchesSearchQuery(base, "010 9999 8888")).toBe(true);
+  });
+
+  it("지역명 공백 없이 붙여 쓴 검색", () => {
+    const row = {
+      name: "점",
+      region: "대구광역시 수성구",
+      managerPhone: "",
+    };
+    expect(storeMatchesSearchQuery(row, "대구광역시수성구")).toBe(true);
+  });
 });

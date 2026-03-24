@@ -203,11 +203,15 @@ export default function RegionMapInner({
                     이 위치에 겹치는 지점이 있어, 지도에서만 옆으로 벌려 표시합니다. 실제 좌표(DB)는 그대로입니다.
                   </p>
                 )}
-                {store.managerPhone && (
-                  <div className="text-zinc-500 dark:text-zinc-400">
-                    지점장: <span className="font-medium">{store.managerPhone}</span>
-                  </div>
-                )}
+                <div className="text-zinc-500 dark:text-zinc-400">
+                  지점장:{" "}
+                  <span className="font-medium">
+                    {store.managerPhone?.trim() ? store.managerPhone : "—"}
+                  </span>
+                </div>
+                <p className="text-[10px] leading-snug text-sky-700 dark:text-sky-300">
+                  이름·지역·연락처 수정은 지도 오른쪽 패널에서 할 수 있습니다.
+                </p>
                 {mapFilterDate ? (
                   <div className="text-amber-700 dark:text-amber-300">
                     <span className="font-medium">{mapFilterDate}</span> 판매:{" "}

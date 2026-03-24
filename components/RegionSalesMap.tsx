@@ -12,16 +12,13 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import type { StoreSalesSummary } from "@/lib/types/store";
 import {
-  appendFilteredSalesToGoogleSheet,
-  getGoogleSheetsExportStatus,
-} from "@/app/actions/googleSheets";
-import {
   addSale,
   addSaleRange,
   buildFilteredStoreSalesCsv,
   createStore,
   deleteStore,
   deleteSalesByStoreAndDate,
+  updateStore,
   getChartRegionSeries,
   getDayOverDayComparison,
   getQuantitiesByStoreForDate,
@@ -37,7 +34,7 @@ import { consumeOpenAiSseStream } from "@/lib/openaiSse";
 import { toast } from "sonner";
 import AdminLogoutButton from "@/components/AdminLogoutButton";
 import DashboardCharts from "@/components/DashboardCharts";
-import { KOREA_SIDO_LIST } from "@/lib/koreaSido";
+import { KOREA_SIDO_LIST, regionMatchesSidoFilter } from "@/lib/koreaSido";
 import { storeMatchesSearchQuery } from "@/lib/storeSearch";
 
 const RegionMapInner = dynamic(() => import("./RegionMapInner"), {
@@ -95,10 +92,6 @@ export default function RegionSalesMap({
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [csvExportPending, setCsvExportPending] = useState(false);
-  const [sheetsExportPending, setSheetsExportPending] = useState(false);
-  const [sheetsExportConfigured, setSheetsExportConfigured] = useState<
-    boolean | null
-  >(null);
 
   // 일일 판매량 입력용 상태
   const [mode, setMode] = useState<"single" | "range">("single");
@@ -132,6 +125,10 @@ export default function RegionSalesMap({
   const [detailQuantity, setDetailQuantity] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailEditQuantity, setDetailEditQuantity] = useState("");
+  const [mapStoreEditName, setMapStoreEditName] = useState("");
+  const [mapStoreEditRegion, setMapStoreEditRegion] = useState("");
+  const [mapStoreEditPhone, setMapStoreEditPhone] = useState("");
+  const [mapStoreEditSaving, setMapStoreEditSaving] = useState(false);
   // 케어 필요 지점 & 검색
   const [careThreshold, setCareThreshold] = useState(100);
   const [storeSearch, setStoreSearch] = useState("");
@@ -143,6 +140,8 @@ export default function RegionSalesMap({
 
   /** 지도에서 지점을 새로 찍을 때만 날짜·사이드바 동기화 (같은 지점이면 날짜 유지) */
   const lastSyncedMapStoreRef = useRef<string | null>(null);
+  /** 지도 패널 지점정보 폼: 마커 바꿀 때만 초기화 (summaries 갱신만으로는 덮어쓰지 않음) */
+  const mapStoreEditInitRef = useRef<string | null>(null);
 
   // 신규 지점 추가 모달 상태
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
@@ -184,7 +183,12 @@ export default function RegionSalesMap({
   const filteredStoreOptions = useMemo(
     () =>
       storeOptions.filter((s) => {
-        if (selectedSido && s.sido !== selectedSido) return false;
+        if (
+          selectedSido &&
+          !regionMatchesSidoFilter(s.region, selectedSido)
+        ) {
+          return false;
+        }
         return storeMatchesSearchQuery(
           {
             name: s.name,
@@ -315,46 +319,6 @@ export default function RegionSalesMap({
   }
 
   useEffect(() => {
-    let cancelled = false;
-    getGoogleSheetsExportStatus()
-      .then(({ configured }) => {
-        if (!cancelled) setSheetsExportConfigured(configured);
-      })
-      .catch(() => {
-        if (!cancelled) setSheetsExportConfigured(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function handleExportSheets() {
-    if (sheetsExportConfigured === false) {
-      toast.error(
-        "Sheets 보내기: .env에 스프레드시트 ID·서비스 계정 JSON을 넣고, 서비스 계정 이메일을 시트에 편집자로 공유하세요.",
-      );
-      return;
-    }
-    setSheetsExportPending(true);
-    try {
-      const { appendedRows, dataRows, includeHeader } =
-        await appendFilteredSalesToGoogleSheet({
-          period,
-          sidoFilter: selectedSido.trim() || undefined,
-          searchQuery: storeSearch.trim() || undefined,
-        });
-      const head = includeHeader ? "헤더 1행 + " : "";
-      toast.success(
-        `Google 시트에 ${head}지점 ${dataRows}행(총 ${appendedRows}행)을 추가했습니다.`,
-      );
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Sheets 보내기에 실패했습니다.");
-    } finally {
-      setSheetsExportPending(false);
-    }
-  }
-
-  useEffect(() => {
     if (!mapFilterDate) {
       setQuantitiesByStoreForDay(null);
       setMapDayLoading(false);
@@ -419,6 +383,22 @@ export default function RegionSalesMap({
     };
   }, [selectedMapStoreId, detailDate]);
 
+  /** 지도 오른쪽 패널: 선택 마커가 바뀔 때만 지점정보 입력란 초기화 */
+  useEffect(() => {
+    if (!selectedMapStoreId) {
+      mapStoreEditInitRef.current = null;
+      return;
+    }
+    const row = summaries.find((s) => s.store.id === selectedMapStoreId);
+    if (!row) return;
+    if (mapStoreEditInitRef.current !== selectedMapStoreId) {
+      mapStoreEditInitRef.current = selectedMapStoreId;
+      setMapStoreEditName(row.store.name);
+      setMapStoreEditRegion(row.store.region ?? "");
+      setMapStoreEditPhone(row.store.managerPhone ?? "");
+    }
+  }, [selectedMapStoreId, summaries]);
+
   /** 조회 완료 시 지도 패널 입력란에 현재 마리 수 반영(수정 편의) */
   useEffect(() => {
     if (!selectedMapStoreId || detailLoading) return;
@@ -461,6 +441,31 @@ export default function RegionSalesMap({
     }
   }
 
+  async function handleMapStoreInfoSave() {
+    if (!selectedMapStoreId) return;
+    if (!mapStoreEditName.trim() || !mapStoreEditRegion.trim()) {
+      toast.error("지점명과 지역을 입력해주세요.");
+      return;
+    }
+    setMapStoreEditSaving(true);
+    try {
+      await updateStore({
+        storeId: selectedMapStoreId,
+        name: mapStoreEditName.trim(),
+        region: mapStoreEditRegion.trim(),
+        managerPhone: mapStoreEditPhone.trim() || undefined,
+      });
+      toast.success("지점 정보를 저장했습니다.");
+      startTransition(() => {
+        refresh(period);
+      });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.");
+    } finally {
+      setMapStoreEditSaving(false);
+    }
+  }
+
   async function handleDeleteStore(storeId: string) {
     if (!window.confirm("해당 지점을 삭제하시겠습니까? 관련 판매 기록도 함께 사라집니다.")) {
       return;
@@ -470,6 +475,10 @@ export default function RegionSalesMap({
       toast.success("지점이 삭제되었습니다.");
       if (selectedStoreId === storeId) {
         setSelectedStoreId("");
+      }
+      if (selectedMapStoreId === storeId) {
+        setSelectedMapStoreId(null);
+        mapStoreEditInitRef.current = null;
       }
       startTransition(() => {
         refresh(period);
@@ -880,11 +889,22 @@ export default function RegionSalesMap({
               />
             </div>
           </div>
+          {selectedSido.trim() !== "" && (
+            <p
+              className="text-[10px] leading-snug text-amber-800 dark:text-amber-200/90"
+              role="status"
+            >
+              시/도가 「{selectedSido}」(으)로 고정되어 있어 <strong>그 지역 안에서만</strong> 검색·목록이
+              보입니다. 지도에서 부산 지점을 누르면 여기가 부산으로 맞춰질 수 있습니다. 전국에서 찾으려면
+              아래 폼의 <strong>시/도 선택</strong>을 <strong>전체 시/도</strong>로 바꾸세요.
+            </p>
+          )}
           <p id="care-threshold-hint" className="text-[10px] text-zinc-500 dark:text-zinc-400">
             <strong>용도:</strong> 아래 「지점 선택」 목록을 좁히고,{" "}
-            <strong>지도에서 일치 지점은 파란 링·나머지는 흐림</strong> 처리합니다. 목록에서 지점을 누르면
-            판매 입력 폼에 반영되고 지도가 해당 마커로 이동합니다. 「케어 필요 지점」도 같은 검색어로
-            걸러집니다.
+            <strong>지도에서 일치 지점은 파란 링·나머지는 흐림</strong> 처리합니다. 검색은 띄어쓴 단어를
+            모두 포함하는 지점만 골라 줍니다(예: 「부산 해운대」→「부산광역시 해운대구」). 전화번호는 숫자만
+            넣어도 됩니다. 목록에서 지점을 누르면 판매 입력 폼에 반영되고 지도가 해당 마커로 이동합니다.
+            「케어 필요 지점」도 같은 검색어로 걸러집니다.
           </p>
           {storeSearch.trim() !== "" && (
             <div className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-900/80">
@@ -1171,8 +1191,11 @@ export default function RegionSalesMap({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              상단 <strong>기간</strong>, 위 폼의 <strong>시/도</strong>, <strong>지점 검색</strong>어가 CSV·
-              Google 시트에 동일하게 반영됩니다. CSV는 UTF-8(BOM)으로 엑셀에서 열 수 있습니다.
+              <strong>기간</strong>(상단), <strong>지점 검색</strong>(위 입력란), 일일 입력 폼의{" "}
+              <strong>시/도</strong>가 CSV에 같이 적용됩니다.{" "}
+              <strong>「지점 선택」만 고른 것</strong>은 행 수를 줄이지 않습니다(한 곳만 필요하면 검색어로
+              좁히세요). 엑셀은 파일을 더블클릭하지 말고{" "}
+              <strong>데이터 → 텍스트/CSV</strong>에서 UTF-8로 가져오면 한글이 안 깨집니다.
             </p>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
@@ -1184,31 +1207,6 @@ export default function RegionSalesMap({
                 aria-busy={csvExportPending}
               >
                 {csvExportPending ? "CSV 만드는 중…" : "CSV 다운로드"}
-              </button>
-              <button
-                type="button"
-                onClick={handleExportSheets}
-                disabled={
-                  sheetsExportPending ||
-                  sheetsExportConfigured === false ||
-                  sheetsExportConfigured === null
-                }
-                title={
-                  sheetsExportConfigured === false
-                    ? ".env에 GOOGLE_SHEETS_SPREADSHEET_ID와 서비스 계정 JSON을 설정하세요."
-                    : sheetsExportConfigured === null
-                      ? "설정 확인 중…"
-                      : "연결된 스프레드시트 하단에 행 추가 (헤더 1행 + 데이터)"
-                }
-                className="rounded-lg border border-emerald-600/70 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/50 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/50"
-                aria-label="필터가 적용된 지점 판매 데이터를 Google 스프레드시트에 추가"
-                aria-busy={sheetsExportPending}
-              >
-                {sheetsExportPending
-                  ? "Sheets에 보내는 중…"
-                  : sheetsExportConfigured === null
-                    ? "Sheets 확인 중…"
-                    : "Sheets에 추가"}
               </button>
             </div>
           </div>
@@ -1427,28 +1425,103 @@ export default function RegionSalesMap({
           {/* 지도 위 선택 지점 일별 판매 패널 */}
           {isMapOpen && selectedMapStoreId && (
               <div
-                className="pointer-events-auto absolute right-2 top-2 z-[500] w-[min(100vw-1rem,18.5rem)] max-w-[18.5rem] rounded-xl border border-zinc-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 sm:right-3 sm:top-3"
+                className="pointer-events-auto absolute right-2 top-2 z-[500] flex max-h-[min(85dvh,calc(100%-1rem))] w-[min(100vw-1rem,22rem)] max-w-[22rem] flex-col rounded-xl border border-zinc-200 bg-white/95 text-sm shadow-lg backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95 sm:right-3 sm:top-3"
                 role="dialog"
-                aria-label="지도에서 선택한 지점 일별 판매 빠른 입력"
+                aria-label="지도에서 선택한 지점 정보 수정 및 일별 판매 입력"
               >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                <div className="shrink-0 border-b border-zinc-200 p-3 dark:border-zinc-700">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                      선택 지점
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMapStoreId(null);
+                        mapStoreEditInitRef.current = null;
+                      }}
+                      className="rounded px-1 text-xs text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:hover:text-zinc-200"
+                      aria-label="지도 패널 닫기"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                    지점명·지역·연락처를 바꾼 뒤{" "}
+                    <strong className="text-zinc-600 dark:text-zinc-300">지점 정보 저장</strong>을 누르세요.
+                    지역이 바뀌면 지도 위치도 다시 맞춥니다.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label
+                        htmlFor="map-store-edit-name"
+                        className="mb-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
+                      >
+                        지점명
+                      </label>
+                      <input
+                        id="map-store-edit-name"
+                        type="text"
+                        value={mapStoreEditName}
+                        onChange={(e) => setMapStoreEditName(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 px-2 text-xs text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-offset-zinc-900"
+                        autoComplete="organization"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="map-store-edit-region"
+                        className="mb-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
+                      >
+                        지역 (예: 서울특별시 강남구)
+                      </label>
+                      <input
+                        id="map-store-edit-region"
+                        type="text"
+                        value={mapStoreEditRegion}
+                        onChange={(e) => setMapStoreEditRegion(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 px-2 text-xs text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-offset-zinc-900"
+                        autoComplete="address-level1"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="map-store-edit-phone"
+                        className="mb-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300"
+                      >
+                        지점장 연락처
+                      </label>
+                      <input
+                        id="map-store-edit-phone"
+                        type="tel"
+                        value={mapStoreEditPhone}
+                        onChange={(e) => setMapStoreEditPhone(e.target.value)}
+                        placeholder="예: 010-1234-5678"
+                        className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 px-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-offset-zinc-900"
+                        autoComplete="tel"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleMapStoreInfoSave}
+                      disabled={mapStoreEditSaving}
+                      className="w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold text-white hover:bg-zinc-900 disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
+                      aria-label="지도에서 선택한 지점 기본 정보 저장"
+                      aria-busy={mapStoreEditSaving}
+                    >
+                      {mapStoreEditSaving ? "저장 중…" : "지점 정보 저장"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <div className="mb-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
                     일별 판매 · 빠른 입력
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMapStoreId(null)}
-                    className="rounded px-1 text-xs text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:hover:text-zinc-200"
-                    aria-label="일별 판매 패널 닫기"
-                  >
-                    닫기
-                  </button>
-                </div>
-                <div className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  {summaries.find((s) => s.store.id === selectedMapStoreId)?.store.name ?? "지점"}{" "}
-                  · 왼쪽 「지점 선택」·「일일 판매량 저장」과 동기화됩니다. 날짜·마리 수 입력 후{" "}
-                  <strong>저장</strong>하면 신규 등록·수정 모두 반영됩니다.
-                </div>
+                  </div>
+                  <div className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    왼쪽 「지점 선택」·「일일 판매량 저장」과 동기화됩니다. 날짜·마리 수 입력 후{" "}
+                    <strong>저장</strong>하면 신규 등록·수정 모두 반영됩니다.
+                  </div>
 
                 <label
                   htmlFor="map-detail-date-input"
@@ -1510,6 +1583,7 @@ export default function RegionSalesMap({
                   >
                     삭제
                   </button>
+                </div>
                 </div>
               </div>
           )}

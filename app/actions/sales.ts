@@ -1,6 +1,8 @@
  "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { regionMatchesSidoFilter } from "@/lib/koreaSido";
+import { storeFromSupabaseRow, type SupabaseStoreRow } from "@/lib/storeMapper";
 import { storeMatchesSearchQuery } from "@/lib/storeSearch";
 import type { Store, StoreSalesSummary } from "@/lib/types/store";
 
@@ -79,7 +81,51 @@ export async function createStore(params: {
     throw new Error(error.message);
   }
 
-  return data as Store;
+  return storeFromSupabaseRow(data as SupabaseStoreRow);
+}
+
+export async function updateStore(params: {
+  storeId: string;
+  name: string;
+  region: string;
+  managerPhone?: string;
+}) {
+  const supabase = createClient();
+  const { storeId, name, region, managerPhone } = params;
+  const regionTrim = region.trim();
+  const nameTrim = name.trim();
+  if (!nameTrim || !regionTrim) {
+    throw new Error("지점명과 지역을 입력해주세요.");
+  }
+
+  const { data: cur, error: curErr } = await supabase
+    .from("stores")
+    .select("lat, lng")
+    .eq("id", storeId)
+    .maybeSingle();
+
+  if (curErr) throw new Error(curErr.message);
+  if (!cur) throw new Error("지점을 찾을 수 없습니다.");
+
+  const curRow = cur as { lat: number; lng: number };
+  const coords =
+    (await geocodeRegion(regionTrim)) ?? {
+      lat: Number(curRow.lat),
+      lng: Number(curRow.lng),
+    };
+
+  const { error } = await supabase
+    .from("stores")
+    .update({
+      name: nameTrim,
+      region: regionTrim,
+      manager_phone: managerPhone?.trim() || null,
+      lat: coords.lat,
+      lng: coords.lng,
+    })
+    .eq("id", storeId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteStore(storeId: string) {
@@ -271,7 +317,9 @@ export async function getStoreSummaries(period: PeriodKey): Promise<StoreSalesSu
     throw new Error(storesError.message);
   }
 
-  const stores = (storesData ?? []) as Store[];
+  const stores = (storesData ?? []).map((row) =>
+    storeFromSupabaseRow(row as SupabaseStoreRow),
+  );
 
   // 2) 기간 내 판매 로그 조회
   let logsQuery = supabase.from("sales_logs").select("store_id, quantity, sales_date");
@@ -768,8 +816,14 @@ function csvEscapeField(value: string): string {
   return value;
 }
 
+/** 필터된 지점 목록 + 전체 지점 등록순 번호(1부터, created_at 오름차순) */
+export type FilteredStoreExportPayload = {
+  summaries: StoreSalesSummary[];
+  registrationRankById: Map<string, number>;
+};
+
 /**
- * CSV / Google Sheets 보내기와 동일한 필터로 지점별 판매 요약 목록
+ * CSV 보내기와 동일한 필터로 지점별 판매 요약 목록
  */
 export async function getFilteredStoreSummariesForExport(params: {
   period: PeriodKey;
@@ -777,16 +831,18 @@ export async function getFilteredStoreSummariesForExport(params: {
   sidoFilter?: string;
   /** 지점 검색어(이름·지역·전화) */
   searchQuery?: string;
-}): Promise<StoreSalesSummary[]> {
+}): Promise<FilteredStoreExportPayload> {
   let summaries = await getStoreSummaries(params.period);
+
+  const registrationRankById = new Map<string, number>(
+    summaries.map((s, i) => [s.store.id, i + 1]),
+  );
 
   if (params.sidoFilter?.trim()) {
     const sf = params.sidoFilter.trim();
-    summaries = summaries.filter((s) => {
-      const region = s.store.region ?? "";
-      const first = region.trim().split(/\s+/)[0] ?? "";
-      return first === sf;
-    });
+    summaries = summaries.filter((s) =>
+      regionMatchesSidoFilter(s.store.region, sf),
+    );
   }
 
   if (params.searchQuery?.trim()) {
@@ -803,7 +859,13 @@ export async function getFilteredStoreSummariesForExport(params: {
     );
   }
 
-  return summaries;
+  summaries.sort(
+    (a, b) =>
+      (registrationRankById.get(a.store.id) ?? 0) -
+      (registrationRankById.get(b.store.id) ?? 0),
+  );
+
+  return { summaries, registrationRankById };
 }
 
 /**
@@ -816,29 +878,33 @@ export async function buildFilteredStoreSalesCsv(params: {
   /** 지점 검색어(이름·지역·전화) */
   searchQuery?: string;
 }): Promise<string> {
-  const summaries = await getFilteredStoreSummariesForExport(params);
+  const { summaries, registrationRankById } =
+    await getFilteredStoreSummariesForExport(params);
 
   const headers = [
-    "store_id",
-    "store_name",
-    "region",
-    "manager_phone",
-    "total_quantity_mari",
-    "period_key",
+    "지점번호",
+    "지점명",
+    "지역",
+    "담당연락처",
+    "누적마리",
+    "집계기간",
+    "시스템ID",
   ];
 
   const lines = [
     headers.join(","),
-    ...summaries.map(({ store, totalQuantity }) =>
-      [
-        csvEscapeField(store.id),
+    ...summaries.map(({ store, totalQuantity }) => {
+      const no = registrationRankById.get(store.id) ?? "";
+      return [
+        csvEscapeField(String(no)),
         csvEscapeField(store.name),
         csvEscapeField(store.region ?? ""),
         csvEscapeField(store.managerPhone ?? ""),
         csvEscapeField(String(totalQuantity)),
         csvEscapeField(params.period),
-      ].join(","),
-    ),
+        csvEscapeField(store.id),
+      ].join(",");
+    }),
   ];
 
   return `\uFEFF${lines.join("\r\n")}`;
